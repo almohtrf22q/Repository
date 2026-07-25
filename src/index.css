@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-cairo {
+    font-family: 'Cairo', 'Tajawal', system-ui, sans-serif;
+  }
+  .font-tajawal {
+    font-family: 'Tajawal', 'Cairo', system-ui, sans-serif;
+  }
+}
+
+/* Custom golden gradient for action buttons */
+.btn-gold {
+  background: linear-gradient(135deg, #d4af37 0%, #b8860b 50%, #996515 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 15px rgba(184, 134, 11, 0.35);
+  transition: all 0.3s ease;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, #e5be48 0%, #c9971c 50%, #aa7626 100%);
+  box-shadow: 0 6px 20px rgba(184, 134, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-navy {
+  background: linear-gradient(135deg, #0f2c59 0%, #0b1e3d 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 15px rgba(15, 44, 89, 0.3);
+  transition: all 0.3s ease;
+}
+
+.btn-navy:hover {
+  background: linear-gradient(135deg, #173d78 0%, #0f2c59 100%);
+  box-shadow: 0 6px 20px rgba(15, 44, 89, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Glassmorphism card effect */
+.service-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 10px 25px -5px rgba(15, 44, 89, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.service-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 30px -10px rgba(15, 44, 89, 0.18);
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
