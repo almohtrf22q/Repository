@@ -97,7 +97,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  // NOTE: the early "if (!isOpen) return null" used to live here — that's
+  // incorrect because several useState calls appear *after* it below, which
+  // violates React's Rules of Hooks (a different number of hooks would run
+  // depending on isOpen) and crashes the whole app with a blank white screen.
+  // The real early-return now happens right before the JSX, after every hook.
 
   // Active Tab: 'bookings' | 'offers' | 'stats'
   const [activeTab, setActiveTab] = useState<'bookings' | 'offers' | 'stats'>('bookings');
@@ -205,6 +209,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       category: 'package'
     });
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
