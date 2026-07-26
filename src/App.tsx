@@ -187,10 +187,9 @@ export default function App() {
     handleOpenBooking(offer.category === 'hajj_umrah' ? 'hajj_umrah' : 'flight');
   };
 
-  // Admin booking status/payment updates now go straight to the server from
-  // inside AdminDashboardModal (see onUpdateBookingStatus/onUpdatePaymentStatus
-  // there), since the admin view is fed by the shared database, not this
-  // browser's local state.
+  // Admin booking status/payment/delete actions now go straight to the
+  // server from inside AdminDashboardModal, since the admin view is fed by
+  // the shared database, not this browser's local state.
 
   const handleUpdateOfferPrice = (offerId: string, newPrice: number, newOriginalPrice?: number) => {
     setOffers((prev) =>
@@ -204,6 +203,16 @@ export default function App() {
           : o
       )
     );
+  };
+
+  const handleUpdateOfferToggle = (offerId: string, updates: Partial<DestinationOffer>) => {
+    setOffers((prev) =>
+      prev.map((o) => (o.id === offerId ? { ...o, ...updates } : o))
+    );
+  };
+
+  const handleBatchOfferToggle = (updates: Partial<DestinationOffer>) => {
+    setOffers((prev) => prev.map((o) => ({ ...o, ...updates })));
   };
 
   const handleAddOffer = (newOffer: DestinationOffer) => {
@@ -333,6 +342,8 @@ export default function App() {
         onClose={() => setAdminModalOpen(false)}
         offers={offers}
         onUpdateOfferPrice={handleUpdateOfferPrice}
+        onUpdateOfferToggle={handleUpdateOfferToggle}
+        onBatchOfferToggle={handleBatchOfferToggle}
         onAddOffer={handleAddOffer}
         onDeleteOffer={handleDeleteOffer}
       />

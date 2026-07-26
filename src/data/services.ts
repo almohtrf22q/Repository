@@ -1,7 +1,7 @@
 import { ServiceItem } from '../types';
 
 import heroBannerImg from '../assets/images/travel_hero_banner_1784982740709.jpg';
-import logoImg from '../assets/images/logo_almuhtarif_emblem_1784984109462.jpg';
+import logoImg from '../assets/images/logo_almuhtarif_official_1785014621620.jpg';
 import planeImg from '../assets/images/service_plane_1784982753212.jpg';
 import passportImg from '../assets/images/service_passport_1784982763538.jpg';
 import kaabaImg from '../assets/images/service_kaaba_1784982772382.jpg';

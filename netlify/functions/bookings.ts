@@ -11,7 +11,7 @@ function json(data: unknown, status = 200) {
       'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS'
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS'
     }
   });
 }
@@ -86,6 +86,22 @@ export default async (req: Request, _context: Context) => {
 
     await store.setJSON(BOOKINGS_KEY, bookings);
     return json(bookings[idx]);
+  }
+
+  // ---- DELETE: remove a booking (admin only) ----
+  if (req.method === 'DELETE') {
+    const auth = req.headers.get('authorization') || '';
+    const token = auth.replace(/^Bearer\s+/i, '');
+    const valid = await verifyToken(store, token);
+    if (!valid) return json({ error: 'unauthorized' }, 401);
+
+    const orderId = url.searchParams.get('orderId');
+    if (!orderId) return json({ error: 'missing_orderId' }, 400);
+
+    const bookings = await loadBookings(store);
+    const next = bookings.filter((b: any) => b.orderId !== orderId);
+    await store.setJSON(BOOKINGS_KEY, next);
+    return json({ ok: true });
   }
 
   return json({ error: 'method_not_allowed' }, 405);

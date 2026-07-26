@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BookingRequest } from '../types';
 import { 
   X, Search, QrCode, CheckCircle2, Clock, FileText, Send, Download, 
@@ -17,8 +18,6 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
   onClose,
   userBookings = []
 }) => {
-  if (!isOpen) return null;
-
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<BookingRequest | null>(
     userBookings.length > 0 ? userBookings[0] : null
@@ -136,8 +135,22 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 transform animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0.1 }}
+            className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]"
+          >
         
         {/* Header */}
         <div className="bg-[#0F2C59] p-4 sm:p-5 text-white flex items-center justify-between flex-shrink-0">
@@ -335,7 +348,9 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
           )}
 
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

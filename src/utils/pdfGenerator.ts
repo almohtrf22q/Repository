@@ -59,15 +59,25 @@ export async function generateBookingPDF(booking: BookingRequest): Promise<void>
   container.style.boxSizing = 'border-box';
 
   const documentsListHtml = (booking.documents && booking.documents.length > 0)
-    ? booking.documents.map((doc, idx) => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:6px; font-size:12px;">
-          <div>
-            <span style="font-weight:bold; color:#0F2C59;">${idx + 1}. ${doc.name}</span>
-            <span style="color:#64748b; font-size:11px; margin-right:8px;">(${doc.size})</span>
+    ? `
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px;">
+        ${booking.documents.map((doc, idx) => `
+          <div style="flex: 1; min-width: 220px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background-color: #f8fafc; text-align: right;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: bold; color: #0F2C59; font-size: 11px;">${idx + 1}. ${doc.name}</span>
+              <span style="color: #059669; font-weight: bold; font-size: 10px; background-color: #ecfdf5; border: 1px solid #a7f3d0; padding: 2px 6px; border-radius: 6px;">مرفق ومفحوص ✓</span>
+            </div>
+            ${doc.previewUrl ? `
+              <div style="text-align: center; background: #ffffff; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 6px;">
+                <img src="${doc.previewUrl}" alt="${doc.name}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 4px;" />
+              </div>
+            ` : `
+              <div style="font-size: 10px; color: #64748b; margin-top: 4px;">نوع الملف: ${doc.type} (${doc.size})</div>
+            `}
           </div>
-          <span style="color:#059669; font-weight:bold; font-size:11px; background-color:#ecfdf5; padding:2px 8px; border-radius:12px;">مرفق ومفحوص ✓</span>
-        </div>
-      `).join('')
+        `).join('')}
+      </div>
+    `
     : `<div style="font-size:12px; color:#64748b; padding:8px; text-align:center;">لا يوجد ملفات مرفقة (تم التدقيق الإلكتروني بالمكتب)</div>`;
 
   container.innerHTML = `
@@ -148,6 +158,18 @@ export async function generateBookingPDF(booking: BookingRequest): Promise<void>
                 <span style="color: #64748b; font-weight: bold;">تاريخ السفر المجدول:</span>
                 <span style="font-weight: bold; color: #0F2C59;">${booking.travelDate}</span>
               </div>
+
+              ${booking.hostAbsherPhone ? `
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; margin-bottom: 6px;">
+                <span style="color: #64748b; font-weight: bold;">جوال المستضيف (أبشر):</span>
+                <span style="font-weight: bold; color: #047857; direction: ltr;">${booking.hostAbsherPhone}</span>
+              </div>` : ''}
+
+              ${booking.hostIqamaNumber ? `
+              <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; margin-bottom: 6px;">
+                <span style="color: #64748b; font-weight: bold;">رقم إقامة المستضيف:</span>
+                <span style="font-weight: bold; color: #0F2C59;">${booking.hostIqamaNumber}</span>
+              </div>` : ''}
 
               <div style="display: flex; justify-content: space-between;">
                 <span style="color: #64748b; font-weight: bold;">عدد المسافرين:</span>
@@ -254,7 +276,17 @@ export async function generateBookingPDF(booking: BookingRequest): Promise<void>
       scale: 2,
       useCORS: true,
       allowTaint: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      onclone: (clonedDoc) => {
+        // html2canvas fails when parsing modern CSS Tailwind v4 'oklch' color functions.
+        // Strip out style tags containing 'oklch' from the cloned document.
+        const styleElements = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        styleElements.forEach((el) => {
+          if (el.textContent && el.textContent.includes('oklch')) {
+            el.remove();
+          }
+        });
+      }
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);

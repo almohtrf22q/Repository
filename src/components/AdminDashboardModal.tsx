@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BookingRequest, DestinationOffer } from '../types';
 import { 
   X, Lock, User, Key, ShieldCheck, DollarSign, Tag, CheckCircle2, 
-  Clock, FileText, Download, Plus, Edit2, Trash2, Eye, LogOut, 
-  Search, Filter, TrendingUp, Users, AlertCircle, RefreshCw, FileSpreadsheet, HardDriveDownload
+  Clock, FileText, Download, Plus, Edit2, Trash2, Eye, EyeOff, LogOut, 
+  Search, Filter, TrendingUp, Users, AlertCircle, RefreshCw, FileSpreadsheet, HardDriveDownload,
+  MessageSquare, UserCheck, FolderCheck, Calendar, Phone, Mail, ChevronRight, SlidersHorizontal, Percent, Sparkles
 } from 'lucide-react';
 import { generateBookingPDF } from '../utils/pdfGenerator';
 import { exportBookingsToCSV, exportBackupJSON } from '../utils/exportUtils';
@@ -14,6 +16,8 @@ interface AdminDashboardModalProps {
   onClose: () => void;
   offers: DestinationOffer[];
   onUpdateOfferPrice: (offerId: string, newPrice: number, newOriginalPrice?: number) => void;
+  onUpdateOfferToggle?: (offerId: string, updates: Partial<DestinationOffer>) => void;
+  onBatchOfferToggle?: (updates: Partial<DestinationOffer>) => void;
   onAddOffer: (newOffer: DestinationOffer) => void;
   onDeleteOffer: (offerId: string) => void;
 }
@@ -23,6 +27,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onClose,
   offers,
   onUpdateOfferPrice,
+  onUpdateOfferToggle,
+  onBatchOfferToggle,
   onAddOffer,
   onDeleteOffer
 }) => {
@@ -35,8 +41,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Bookings now live on the server (Netlify Function + database) instead of
-  // this browser's localStorage, so the admin sees every customer's booking.
+  // Bookings live on the server (Netlify Function + database), so the admin
+  // sees every customer's booking regardless of device/browser.
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState('');
@@ -97,14 +103,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // NOTE: the early "if (!isOpen) return null" used to live here — that's
-  // incorrect because several useState calls appear *after* it below, which
-  // violates React's Rules of Hooks (a different number of hooks would run
-  // depending on isOpen) and crashes the whole app with a blank white screen.
-  // The real early-return now happens right before the JSX, after every hook.
+  const onDeleteBooking = async (orderId: string) => {
+    if (!adminToken) return;
+    setBookings((prev) => prev.filter((b) => b.orderId !== orderId));
+    try {
+      await fetch(`/api/bookings?orderId=${encodeURIComponent(orderId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+    } catch {
+      setBookingsError('فشل حذف الطلب من الخادم.');
+    }
+  };
 
-  // Active Tab: 'bookings' | 'offers' | 'stats'
-  const [activeTab, setActiveTab] = useState<'bookings' | 'offers' | 'stats'>('bookings');
+  // Active Tab: 'bookings' | 'customers' | 'offers' | 'stats'
+  const [activeTab, setActiveTab] = useState<'bookings' | 'customers' | 'offers' | 'stats'>('bookings');
 
   // Booking Search/Filter
   const [bookingSearch, setBookingSearch] = useState('');
@@ -126,7 +139,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     discountBadge: 'عرض خاص',
     duration: '5 أيام',
     highlights: 'تذاكر مؤكدة، فندق 4 نجوم، استقبال بالمطار',
-    category: 'package' as const
+    category: 'package' as const,
+    isPriceNegotiable: false,
+    hideDiscount: false,
+    isHidden: false
   });
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -169,6 +185,57 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     return matchesSearch && matchesStatus;
   });
 
+  // Unique Customer Aggregation
+  const uniqueCustomersMap = new Map<string, {
+    key: string;
+    name: string;
+    phone: string;
+    email?: string;
+    totalBookings: number;
+    totalSpent: number;
+    bookings: BookingRequest[];
+    lastBookingDate: string;
+    documents: { id: string; name: string; size: string }[];
+  }>();
+
+  bookings.forEach((b) => {
+    const key = (b.phone || b.customerName).trim();
+    const existing = uniqueCustomersMap.get(key);
+    const docs = b.documents || [];
+    if (!existing) {
+      uniqueCustomersMap.set(key, {
+        key,
+        name: b.customerName,
+        phone: b.phone,
+        email: b.email,
+        totalBookings: 1,
+        totalSpent: b.totalAmount || 0,
+        bookings: [b],
+        lastBookingDate: b.createdAt,
+        documents: [...docs]
+      });
+    } else {
+      existing.totalBookings += 1;
+      existing.totalSpent += (b.totalAmount || 0);
+      existing.bookings.push(b);
+      docs.forEach((doc) => {
+        if (!existing.documents.some((d) => d.id === doc.id)) {
+          existing.documents.push(doc);
+        }
+      });
+    }
+  });
+
+  const searchLower = bookingSearch.toLowerCase().trim();
+  const customerList = Array.from(uniqueCustomersMap.values()).filter((c) => {
+    if (!searchLower) return true;
+    return (
+      c.name.toLowerCase().includes(searchLower) ||
+      c.phone.toLowerCase().includes(searchLower) ||
+      (c.email && c.email.toLowerCase().includes(searchLower))
+    );
+  });
+
   const totalRevenue = bookings.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
   const totalPassengers = bookings.reduce((acc, curr) => acc + (curr.passengers || 1), 0);
 
@@ -189,10 +256,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       discountBadge: newOfferData.discountBadge,
       image: heroBannerImg,
       duration: newOfferData.duration,
-      highlights: newOfferData.highlights.split('،').map((s) => s.trim()),
+      highlights: newOfferData.highlights.split('،').map((s) => s.trim()).filter(Boolean),
       rating: 4.9,
       featured: true,
-      category: newOfferData.category
+      category: newOfferData.category,
+      isPriceNegotiable: newOfferData.isPriceNegotiable,
+      hideDiscount: newOfferData.hideDiscount,
+      isHidden: newOfferData.isHidden
     };
 
     onAddOffer(created);
@@ -206,15 +276,30 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       discountBadge: 'عرض خاص',
       duration: '5 أيام',
       highlights: 'تذاكر مؤكدة، فندق 4 نجوم، استقبال بالمطار',
-      category: 'package'
+      category: 'package',
+      isPriceNegotiable: false,
+      hideDiscount: false,
+      isHidden: false
     });
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl border border-slate-200 transform animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0.1 }}
+            className="bg-white rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[92vh]"
+          >
         
         {/* Top Header */}
         <div className="bg-gradient-to-r from-[#0B1E3D] via-[#0F2C59] to-[#153B75] p-4 sm:p-5 text-white flex items-center justify-between flex-shrink-0 border-b border-amber-500/40">
@@ -327,22 +412,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               
               {/* Navigation Tabs */}
               <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setActiveTab('bookings')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                       activeTab === 'bookings'
                         ? 'bg-[#0F2C59] text-amber-300 shadow-md'
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
                     <FileText className="w-4 h-4" />
-                    <span>إدارة الطلبات والحجوزات ({bookings.length})</span>
+                    <span>إدارة الطلبات ({bookings.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('customers')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                      activeTab === 'customers'
+                        ? 'bg-[#0F2C59] text-amber-300 shadow-md'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>سجل العملاء والمسافرين ({customerList.length})</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('offers')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                       activeTab === 'offers'
                         ? 'bg-[#0F2C59] text-amber-300 shadow-md'
                         : 'text-slate-600 hover:bg-slate-100'
@@ -354,14 +451,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                   <button
                     onClick={() => setActiveTab('stats')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                       activeTab === 'stats'
                         ? 'bg-[#0F2C59] text-amber-300 shadow-md'
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
                     <TrendingUp className="w-4 h-4" />
-                    <span>التقرير المالي والإحصائيات</span>
+                    <span>التقرير المالي</span>
                   </button>
                 </div>
 
@@ -417,7 +514,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         <option value="processing">جاري المعالجة والإصدار</option>
                         <option value="ready">جاهز للتسليم</option>
                         <option value="completed">مكتمل</option>
-                        <option value="cancelled">ملغي</option>
+                        <option value="cancelled">ملغي / لم يتم الاتفاق</option>
                       </select>
                     </div>
                   </div>
@@ -473,6 +570,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 <Download className="w-3.5 h-3.5 text-[#0F2C59]" />
                                 <span>طباعة PDF</span>
                               </button>
+
+                              {onDeleteBooking && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`هل أنت متأكد من حذف طلب الحجز رقم #${b.orderId} للعميل (${b.customerName}) لعدم الاتفاق؟\nسيتم حذف الطلب نهائياً من اللوحة.`)) {
+                                      onDeleteBooking(b.orderId);
+                                    }
+                                  }}
+                                  className="bg-red-50 hover:bg-red-100 text-red-700 font-bold px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 border border-red-200 cursor-pointer transition-colors shadow-2xs"
+                                  title="حذف طلب الحجز لعدم الاتفاق"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                  <span>حذف (عدم الاتفاق)</span>
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -487,6 +600,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <span className="text-slate-400 block font-bold">تفاصيل الرحلة:</span>
                               <span className="font-bold text-slate-800">{b.destination}</span>
                               <span className="block text-slate-500 text-[11px]">تاريخ السفر: {b.travelDate} ({b.passengers} شخص)</span>
+                              {b.hostAbsherPhone && (
+                                <span className="block text-emerald-700 font-bold text-[11px]">جوال المستضيف (أبشر): {b.hostAbsherPhone}</span>
+                              )}
+                              {b.hostIqamaNumber && (
+                                <span className="block text-blue-900 font-bold text-[11px]">إقامة المستضيف: {b.hostIqamaNumber}</span>
+                              )}
                             </div>
 
                             <div>
@@ -526,7 +645,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 <option value="processing">جاري المعالجة والإصدار</option>
                                 <option value="ready">جاهز للتسليم والإنهاء</option>
                                 <option value="completed">مكتمل بنجاح</option>
-                                <option value="cancelled">ملغي</option>
+                                <option value="cancelled">ملغي (عدم الاتفاق)</option>
                               </select>
                             </div>
 
@@ -556,14 +675,177 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
+              {/* TAB: REGISTERED CUSTOMERS DIRECTORY */}
+              {activeTab === 'customers' && (
+                <div className="space-y-4 font-tajawal">
+                  
+                  {/* Informational Banner & Stats */}
+                  <div className="bg-[#0F2C59] p-4 sm:p-5 rounded-2xl text-white flex flex-wrap items-center justify-between gap-4 shadow-md">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-5 h-5 text-amber-400" />
+                        <h4 className="text-lg font-black font-cairo text-white">سجل العملاء والمسافرين المحفوظين</h4>
+                      </div>
+                      <p className="text-xs text-slate-300 font-bold mt-1">
+                        يتم حفظ كل عميل تلقائياً في قاعدة البيانات فور إتمام الحجز مع ربط جميع جوازاته والمستندات بملفه.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/10 px-3 py-1.5 rounded-xl text-center border border-white/10">
+                        <span className="text-[10px] text-amber-300 block font-bold">إجمالي العملاء</span>
+                        <span className="text-lg font-black text-white font-mono">{uniqueCustomersMap.size}</span>
+                      </div>
+                      <div className="bg-white/10 px-3 py-1.5 rounded-xl text-center border border-white/10">
+                        <span className="text-[10px] text-amber-300 block font-bold">إجمالي الطلبات</span>
+                        <span className="text-lg font-black text-white font-mono">{bookings.length}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Search Bar */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                    <input
+                      type="text"
+                      placeholder="البحث عن عميل باسمه، رقم هاتفه، أو بريده الإلكتروني..."
+                      value={bookingSearch}
+                      onChange={(e) => setBookingSearch(e.target.value)}
+                      className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500 shadow-xs"
+                    />
+                  </div>
+
+                  {/* Customer Cards List */}
+                  {customerList.length > 0 ? (
+                    <div className="space-y-4">
+                      {customerList.map((customer) => {
+                        const cleanPhone = customer.phone.replace(/[^0-9]/g, '');
+                        const waNumber = cleanPhone.startsWith('967') ? cleanPhone : `967${cleanPhone}`;
+                        const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(`مرحباً ${customer.name}، تواصل معك مكتب المحترف للسفريات بخصوص حجوزاتك.`)}`;
+
+                        return (
+                          <div key={customer.key} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all space-y-4">
+                            
+                            {/* Customer Profile Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-[#0F2C59] text-amber-400 font-bold flex items-center justify-center font-cairo text-sm shadow-xs">
+                                  {customer.name.slice(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h5 className="font-black text-[#0F2C59] text-sm font-cairo">{customer.name}</h5>
+                                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                      عميل موثق
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-bold mt-0.5">
+                                    <span className="flex items-center gap-1">
+                                      <Phone className="w-3 h-3 text-amber-600" />
+                                      <span className="font-mono text-slate-700">{customer.phone}</span>
+                                    </span>
+                                    {customer.email && (
+                                      <span className="flex items-center gap-1">
+                                        <Mail className="w-3 h-3 text-slate-400" />
+                                        <span>{customer.email}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={waUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>مراسلة واتساب</span>
+                                </a>
+
+                                <span className="bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3 py-1.5 rounded-xl">
+                                  المبلغ: ${customer.totalSpent} USD
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Customer Bookings Sub-list */}
+                            <div className="space-y-2">
+                              <span className="text-xs font-bold text-[#0F2C59] block">
+                                الحجوزات والمعاملات المسجلة للعميل ({customer.bookings.length} طلب):
+                              </span>
+
+                              <div className="grid grid-cols-1 gap-2">
+                                {customer.bookings.map((b) => (
+                                  <div key={b.orderId} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <span className="bg-[#0F2C59] text-amber-300 font-mono text-[11px] font-bold px-2 py-0.5 rounded">
+                                        #{b.orderId}
+                                      </span>
+                                      <span className="font-bold text-slate-800">{b.serviceTitle}</span>
+                                      <span className="text-slate-400 text-[11px]">({b.destination})</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-slate-500 font-bold text-[11px]">التاريخ: {b.travelDate}</span>
+                                      <span className="font-black text-emerald-700 font-mono">${b.totalAmount} USD</span>
+                                      
+                                      <button
+                                        onClick={() => generateBookingPDF(b)}
+                                        className="bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Download className="w-3 h-3 text-[#0F2C59]" />
+                                        <span>سند PDF</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Customer Uploaded Passports/Documents */}
+                            {customer.documents && customer.documents.length > 0 && (
+                              <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200/80 text-xs space-y-1.5">
+                                <span className="font-bold text-amber-950 block flex items-center gap-1.5">
+                                  <FolderCheck className="w-4 h-4 text-amber-600" />
+                                  <span>جوازات السفر والوثائق المرفقة لهذا العميل ({customer.documents.length}):</span>
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {customer.documents.map((doc) => (
+                                    <div key={doc.id} className="bg-white border border-amber-300 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 flex items-center gap-1.5 shadow-2xs">
+                                      <FileText className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>{doc.name}</span>
+                                      <span className="text-slate-400 text-[10px]">({doc.size})</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-2">
+                      <Users className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="text-slate-500 text-xs font-bold">لم يتم العثور على عملاء يطابقون كلمة البحث.</p>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
               {/* TAB 2: OFFERS & PRICING MANAGEMENT */}
               {activeTab === 'offers' && (
                 <div className="space-y-5">
                   
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h4 className="text-lg font-black text-[#0F2C59] font-cairo">تعديل أسعار العروض والوجهات</h4>
-                      <p className="text-xs text-slate-500 font-bold font-tajawal">يمكنك تغيير أسعار الرحلات والعروض وإعادة نشرها فورياً للعملاء</p>
+                      <h4 className="text-lg font-black text-[#0F2C59] font-cairo">إدارة العروض والأسعار والخصومات بالواجهة</h4>
+                      <p className="text-xs text-slate-500 font-bold font-tajawal">تحكّم كامل في إخفاء/إظهار العروض والخصومات والأسعار أو تحويلها لأسعار تفاوضية</p>
                     </div>
 
                     <button
@@ -573,6 +855,97 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <Plus className="w-4 h-4" />
                       <span>إضافة عرض سياحي جديد</span>
                     </button>
+                  </div>
+
+                  {/* Master Controls Section */}
+                  <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl border border-amber-500/40 shadow-md space-y-3 font-tajawal">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <SlidersHorizontal className="w-5 h-5 text-amber-400" />
+                        <div>
+                          <h5 className="font-black text-amber-300 text-sm font-cairo">أزرار التحكم الجماعي بالعروض والأسعار</h5>
+                          <p className="text-[11px] text-slate-300">تطبيق أو إلغاء الخصومات والأسعار والعروض فورياً بكبسة زر واحدة</p>
+                        </div>
+                      </div>
+
+                      {/* Summary Badges */}
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                        <span className="bg-slate-800 text-slate-200 px-2.5 py-1 rounded-lg border border-slate-700">
+                          العروض: {offers.length}
+                        </span>
+                        <span className="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                          سعر تفاوضي: {offers.filter(o => o.isPriceNegotiable).length}
+                        </span>
+                        <span className="bg-red-500/20 text-red-300 px-2.5 py-1 rounded-lg border border-red-500/30">
+                          مخفي من الواجهة: {offers.filter(o => o.isHidden).length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-800">
+                      {/* Toggle All Prices Negotiable */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allNegotiable = offers.length > 0 && offers.every(o => o.isPriceNegotiable);
+                          if (onBatchOfferToggle) onBatchOfferToggle({ isPriceNegotiable: !allNegotiable });
+                        }}
+                        className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                          offers.length > 0 && offers.every(o => o.isPriceNegotiable)
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
+                        }`}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        <span>
+                          {offers.length > 0 && offers.every(o => o.isPriceNegotiable)
+                            ? 'إظهار الأسعار الرقمية للجميع'
+                            : 'إخفاء كافة الأسعار (تحويل لسعر تفاوضي)'}
+                        </span>
+                      </button>
+
+                      {/* Toggle All Discounts Hidden */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allDiscountsHidden = offers.length > 0 && offers.every(o => o.hideDiscount);
+                          if (onBatchOfferToggle) onBatchOfferToggle({ hideDiscount: !allDiscountsHidden });
+                        }}
+                        className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                          offers.length > 0 && offers.every(o => o.hideDiscount)
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
+                        }`}
+                      >
+                        <Percent className="w-4 h-4" />
+                        <span>
+                          {offers.length > 0 && offers.every(o => o.hideDiscount)
+                            ? 'إظهار كافة الخصومات'
+                            : 'إخفاء كافة الخصومات والشعارات'}
+                        </span>
+                      </button>
+
+                      {/* Toggle All Offers Hidden */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allOffersHidden = offers.length > 0 && offers.every(o => o.isHidden);
+                          if (onBatchOfferToggle) onBatchOfferToggle({ isHidden: !allOffersHidden });
+                        }}
+                        className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                          offers.length > 0 && offers.every(o => o.isHidden)
+                            ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                        }`}
+                      >
+                        {offers.length > 0 && offers.every(o => o.isHidden) ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        <span>
+                          {offers.length > 0 && offers.every(o => o.isHidden)
+                            ? 'إرجاع وإظهار كافة العروض بالواجهة'
+                            : 'إخفاء كافة العروض من الواجهة'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Add New Offer Modal/Form */}
@@ -634,7 +1007,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
 
                         <div>
-                          <label className="block font-bold text-slate-700 mb-1">السعر الجديد ($) *</label>
+                          <label className="block font-bold text-slate-700 mb-1">السعر المبدئي ($) *</label>
                           <input
                             type="number"
                             required
@@ -666,6 +1039,39 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
                       </div>
 
+                      {/* Options Checkboxes */}
+                      <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-200 text-xs font-bold text-slate-700">
+                        <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={newOfferData.isPriceNegotiable}
+                            onChange={(e) => setNewOfferData({ ...newOfferData, isPriceNegotiable: e.target.checked })}
+                            className="rounded text-amber-500 focus:ring-amber-400"
+                          />
+                          <span>تحويل السعر فوراً إلى (سعر تفاوضي)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={newOfferData.hideDiscount}
+                            onChange={(e) => setNewOfferData({ ...newOfferData, hideDiscount: e.target.checked })}
+                            className="rounded text-amber-500 focus:ring-amber-400"
+                          />
+                          <span>إخفاء شارات الخصم</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={newOfferData.isHidden}
+                            onChange={(e) => setNewOfferData({ ...newOfferData, isHidden: e.target.checked })}
+                            className="rounded text-amber-500 focus:ring-amber-400"
+                          />
+                          <span>إخفاء العرض مؤقتاً من الواجهة</span>
+                        </label>
+                      </div>
+
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
@@ -687,12 +1093,57 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   {/* Offers Grid list */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {offers.map((off) => (
-                      <div key={off.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-3 font-tajawal">
+                      <div
+                        key={off.id}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 font-tajawal ${
+                          off.isHidden
+                            ? 'bg-slate-100/90 border-red-300/80 shadow-2xs opacity-85'
+                            : 'bg-white border-slate-200 shadow-xs'
+                        }`}
+                      >
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md">
-                              {off.discountBadge || 'عرض فعال'}
-                            </span>
+                          {/* Status Row Badges */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {/* Visible or Hidden Badge */}
+                              {off.isHidden ? (
+                                <span className="bg-red-100 text-red-800 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 border border-red-200">
+                                  <EyeOff className="w-3 h-3 text-red-600" />
+                                  <span>مخفي من الواجهة</span>
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 border border-emerald-200">
+                                  <Eye className="w-3 h-3 text-emerald-600" />
+                                  <span>معروض للعملاء</span>
+                                </span>
+                              )}
+
+                              {/* Price Status Badge */}
+                              {off.isPriceNegotiable ? (
+                                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 border border-amber-300">
+                                  <Sparkles className="w-3 h-3 text-amber-600" />
+                                  <span>سعر تفاوضي</span>
+                                </span>
+                              ) : (
+                                <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 border border-slate-200">
+                                  <DollarSign className="w-3 h-3 text-slate-500" />
+                                  <span>سعر رقمي (${off.price})</span>
+                                </span>
+                              )}
+
+                              {/* Discount Status Badge */}
+                              {!off.hideDiscount && off.discountBadge && (
+                                <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-md">
+                                  {off.discountBadge}
+                                </span>
+                              )}
+                              {off.hideDiscount && (
+                                <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                  الخصم مخفي
+                                </span>
+                              )}
+                            </div>
+
                             <span className="text-xs font-bold text-slate-500">{off.city} - {off.country}</span>
                           </div>
 
@@ -700,10 +1151,62 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span className="text-xs text-slate-500 block mt-0.5">المدة: {off.duration}</span>
                         </div>
 
-                        {/* Price Edit Row */}
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        {/* Individual Toggles & Action Row */}
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
+                            <span className="text-[11px] font-bold text-slate-600">تحكم بالمظهر السريع:</span>
+                            
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {/* Toggle Hide Offer */}
+                              <button
+                                type="button"
+                                onClick={() => onUpdateOfferToggle && onUpdateOfferToggle(off.id, { isHidden: !off.isHidden })}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                                  off.isHidden
+                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
+                                    : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                                }`}
+                                title={off.isHidden ? 'إعادة الإظهار بالواجهة' : 'إخفاء العرض عن العملاء'}
+                              >
+                                {off.isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                <span>{off.isHidden ? 'إرجاع وإظهار' : 'إخفاء العرض'}</span>
+                              </button>
+
+                              {/* Toggle Negotiable Price */}
+                              <button
+                                type="button"
+                                onClick={() => onUpdateOfferToggle && onUpdateOfferToggle(off.id, { isPriceNegotiable: !off.isPriceNegotiable })}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                                  off.isPriceNegotiable
+                                    ? 'bg-amber-500 text-slate-950 font-black shadow-2xs'
+                                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                                }`}
+                                title="تبديل بين السعر الرقمي والسعر التفاوضي"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                <span>{off.isPriceNegotiable ? 'إلغاء التفاوضي (إظهار الرقم)' : 'سعر تفاوضي'}</span>
+                              </button>
+
+                              {/* Toggle Discount Visibility */}
+                              <button
+                                type="button"
+                                onClick={() => onUpdateOfferToggle && onUpdateOfferToggle(off.id, { hideDiscount: !off.hideDiscount })}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                                  off.hideDiscount
+                                    ? 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                                    : 'bg-blue-50 text-blue-800 border border-blue-200'
+                                }`}
+                                title="إخفاء أو إظهار شارات الخصم"
+                              >
+                                <Tag className="w-3.5 h-3.5" />
+                                <span>{off.hideDiscount ? 'إظهار الخصم' : 'إخفاء الخصم'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Price Display and Edit */}
                           {editingOfferId === off.id ? (
-                            <div className="space-y-2 animate-in fade-in">
+                            <div className="space-y-2 animate-in fade-in pt-1">
                               <span className="text-xs font-bold text-[#0F2C59] block">تعديل السعر الحالي:</span>
                               <div className="flex items-center gap-2">
                                 <div>
@@ -727,12 +1230,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 </div>
 
                                 <button
+                                  type="button"
                                   onClick={() => handleSavePriceEdit(off.id)}
                                   className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs cursor-pointer"
                                 >
                                   حفظ السعر
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => setEditingOfferId(null)}
                                   className="mt-4 bg-slate-200 text-slate-700 font-bold px-2 py-1.5 rounded-lg text-xs cursor-pointer"
                                 >
@@ -741,19 +1246,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between pt-1">
                               <div>
-                                <span className="text-[10px] text-slate-400 block font-bold">السعر المعلن الحالي:</span>
-                                <div className="flex items-baseline gap-2">
-                                  <span className="text-lg font-black text-[#0F2C59] font-cairo">${off.price} USD</span>
-                                  {off.originalPrice > off.price && (
-                                    <span className="text-xs text-slate-400 line-through">${off.originalPrice}</span>
-                                  )}
-                                </div>
+                                <span className="text-[10px] text-slate-400 block font-bold">الحالة المعلنة بالسعر:</span>
+                                {off.isPriceNegotiable ? (
+                                  <span className="text-xs font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md font-cairo inline-block">
+                                    سعر تفاوضي (غير معروض كـ USD)
+                                  </span>
+                                ) : (
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="text-lg font-black text-[#0F2C59] font-cairo">${off.price} USD</span>
+                                    {!off.hideDiscount && off.originalPrice > off.price && (
+                                      <span className="text-xs text-slate-400 line-through">${off.originalPrice}</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               <div className="flex items-center gap-1">
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setEditingOfferId(off.id);
                                     setEditPrice(off.price);
@@ -766,6 +1278,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 </button>
 
                                 <button
+                                  type="button"
                                   onClick={() => onDeleteOffer(off.id)}
                                   className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
                                   title="حذف العرض"
@@ -827,7 +1340,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           )}
 
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

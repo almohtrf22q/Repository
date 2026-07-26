@@ -47,6 +47,28 @@ export interface BookingRequest {
   totalAmount: number;
   qrCodeUrl?: string;
   loyaltyPointsEarned: number;
+
+  // Detailed fields per service
+  adultsCount?: number;
+  childrenCount?: number;
+  infantsCount?: number;
+  nationalId?: string;
+  passportServiceType?: string;
+  occupation?: string;
+  hajjUmrahProgramType?: string;
+  hajjUmrahMonth?: string;
+  roomType?: string;
+  hostAbsherPhone?: string;
+  hostIqamaNumber?: string;
+  visaType?: string;
+  destinationCountry?: string;
+  departureStation?: string;
+  arrivalStation?: string;
+  transportCompany?: string;
+  hotelName?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  roomCount?: number;
 }
 
 export interface AppointmentSlot {
@@ -75,6 +97,9 @@ export interface DestinationOffer {
   rating: number;
   featured?: boolean;
   category: 'flight' | 'package' | 'hajj_umrah' | 'visa';
+  isHidden?: boolean;
+  isPriceNegotiable?: boolean;
+  hideDiscount?: boolean;
 }
 
 export interface LoyaltyProfile {
