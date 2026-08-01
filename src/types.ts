@@ -1,13 +1,16 @@
+export type SiteTheme = 'navy' | 'emerald' | 'dark' | 'purple' | 'ruby';
+
 export type ServiceType = 
   | 'flight' 
   | 'passport' 
   | 'hajj_umrah' 
   | 'visas' 
   | 'buses' 
-  | 'hotels';
+  | 'hotels'
+  | string;
 
 export interface ServiceItem {
-  id: ServiceType;
+  id: string;
   title: string;
   subtitle: string;
   image: string;

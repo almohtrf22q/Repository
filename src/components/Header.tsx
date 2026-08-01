@@ -46,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Quick Actions Bar */}
-          <div className="flex items-center gap-3 sm:gap-4 text-xs">
+          <div className="flex items-center gap-2 sm:gap-4 text-xs">
             
             <button
               onClick={onOpenTrackOrder}

@@ -14,8 +14,11 @@ import { AppointmentModal } from './components/AppointmentModal';
 import { LoyaltyModal } from './components/LoyaltyModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { ArrowUp } from 'lucide-react';
+import { SERVICES_DATA } from './data/services';
 import { DESTINATION_OFFERS } from './data/offers';
-import { ServiceItem, ServiceType, BookingRequest, DestinationOffer, AppNotification } from './types';
+import { ServiceItem, ServiceType, BookingRequest, DestinationOffer, AppNotification, SiteTheme } from './types';
 
 const INITIAL_BOOKINGS: BookingRequest[] = [
   {
@@ -78,6 +81,26 @@ export default function App() {
   const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
 
+  // Dynamic Services state with LocalStorage persistence
+  const [services, setServices] = useState<ServiceItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('almuhtarif_services');
+      return saved ? JSON.parse(saved) : SERVICES_DATA;
+    } catch {
+      return SERVICES_DATA;
+    }
+  });
+
+  // Site Theme state with LocalStorage persistence
+  const [currentTheme, setCurrentTheme] = useState<SiteTheme>(() => {
+    try {
+      const saved = localStorage.getItem('almuhtarif_theme');
+      return (saved as SiteTheme) || 'navy';
+    } catch {
+      return 'navy';
+    }
+  });
+
   // Dynamic Offers state with LocalStorage persistence
   const [offers, setOffers] = useState<DestinationOffer[]>(() => {
     try {
@@ -116,27 +139,74 @@ export default function App() {
     }
   }, [offers]);
 
-  // Route/Hash listener for secret Admin access (#admin or ?admin=true)
+  // Save Services to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('almuhtarif_services', JSON.stringify(services));
+    } catch (e) {
+      console.error('Error saving services:', e);
+    }
+  }, [services]);
+
+  // Apply Theme to DOM
+  useEffect(() => {
+    try {
+      localStorage.setItem('almuhtarif_theme', currentTheme);
+      document.documentElement.setAttribute('data-theme', currentTheme);
+    } catch (e) {
+      console.error('Error saving theme:', e);
+    }
+  }, [currentTheme]);
+
+  // Route/Path/Hash listener for secret Admin access (/admin, #admin, ?admin=true)
   useEffect(() => {
     const checkAdminRoute = () => {
+      const pathname = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
       const search = window.location.search.toLowerCase();
-      if (hash === '#admin' || hash === '#manager' || hash === '#dashboard' || search.includes('admin=true')) {
+
+      if (
+        pathname === '/admin' ||
+        pathname.endsWith('/admin') ||
+        hash === '#admin' ||
+        hash === '#manager' ||
+        hash === '#dashboard' ||
+        search.includes('admin=true') ||
+        search.includes('admin')
+      ) {
         setAdminModalOpen(true);
       }
     };
 
     checkAdminRoute();
     window.addEventListener('hashchange', checkAdminRoute);
-    return () => window.removeEventListener('hashchange', checkAdminRoute);
+    window.addEventListener('popstate', checkAdminRoute);
+    return () => {
+      window.removeEventListener('hashchange', checkAdminRoute);
+      window.removeEventListener('popstate', checkAdminRoute);
+    };
   }, []);
 
   // Notifications state
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const [notifications, setNotifications] = useState<AppNotification[]>([
     {
       id: 'n1',
-      title: 'لوحة تحكم مدير المكتب متوفرة الآن',
-      message: 'يمكن للمدير الدخول باسم المستخدم admin وكلمة المرور 123456 لتحديث الأسعار ومتابعة الطلبات.',
+      title: 'لوحة تحكم إدارة المكتب',
+      message: 'للدخول للوحة التحكم أضف #admin أو /admin إلى نهاية رابط الموقع، ثم استخدم اسم المستخدم admin وكلمة المرور 123456.',
       date: 'اليوم',
       read: false,
       type: 'system'
@@ -187,7 +257,7 @@ export default function App() {
     handleOpenBooking(offer.category === 'hajj_umrah' ? 'hajj_umrah' : 'flight');
   };
 
-  // Admin booking status/payment/delete actions now go straight to the
+  // Admin booking status/payment/delete/add actions now go straight to the
   // server from inside AdminDashboardModal, since the admin view is fed by
   // the shared database, not this browser's local state.
 
@@ -219,8 +289,24 @@ export default function App() {
     setOffers((prev) => [newOffer, ...prev]);
   };
 
+  const handleEditOffer = (updatedOffer: DestinationOffer) => {
+    setOffers((prev) => prev.map((o) => (o.id === updatedOffer.id ? updatedOffer : o)));
+  };
+
   const handleDeleteOffer = (offerId: string) => {
     setOffers((prev) => prev.filter((o) => o.id !== offerId));
+  };
+
+  const handleAddService = (newService: ServiceItem) => {
+    setServices((prev) => [...prev, newService]);
+  };
+
+  const handleEditService = (updatedService: ServiceItem) => {
+    setServices((prev) => prev.map((s) => (s.id === updatedService.id ? updatedService : s)));
+  };
+
+  const handleDeleteService = (serviceId: string) => {
+    setServices((prev) => prev.filter((s) => s.id !== serviceId));
   };
 
   const handleMarkAllNotificationsAsRead = () => {
@@ -243,7 +329,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-cairo flex flex-col selection:bg-amber-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-cairo flex flex-col selection:bg-amber-500 selection:text-white pb-16 lg:pb-0">
       {/* Top Header Navigation */}
       <Header
         onOpenBooking={() => handleOpenBooking('flight')}
@@ -269,6 +355,7 @@ export default function App() {
 
         {/* 6 Core Services Section */}
         <ServicesSection
+          services={services}
           onSelectService={(service) => setSelectedService(service)}
         />
 
@@ -345,8 +432,36 @@ export default function App() {
         onUpdateOfferToggle={handleUpdateOfferToggle}
         onBatchOfferToggle={handleBatchOfferToggle}
         onAddOffer={handleAddOffer}
+        onEditOffer={handleEditOffer}
         onDeleteOffer={handleDeleteOffer}
+        services={services}
+        onAddService={handleAddService}
+        onEditService={handleEditService}
+        onDeleteService={handleDeleteService}
+        currentTheme={currentTheme}
+        onChangeTheme={setCurrentTheme}
       />
+
+      {/* Floating Mobile Bottom Navigation */}
+      <MobileBottomNav
+        onGoHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        onScrollToServices={scrollToServices}
+        onScrollToOffers={scrollToOffers}
+        onOpenTrackOrder={() => setTrackOrderModalOpen(true)}
+        onOpenBooking={() => handleOpenBooking('flight')}
+        onOpenAdmin={() => setAdminModalOpen(true)}
+      />
+
+      {/* Floating Scroll To Top Button */}
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-20 left-4 lg:bottom-8 lg:left-8 z-40 bg-[#0F2C59] text-amber-300 p-3 rounded-full shadow-2xl border-2 border-amber-400/60 hover:bg-amber-500 hover:text-slate-900 active:scale-95 transition-all cursor-pointer"
+          title="العودة للأعلى"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </button>
+      )}
     </div>
   );
 }

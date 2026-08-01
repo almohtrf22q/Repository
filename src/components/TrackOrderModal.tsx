@@ -76,7 +76,7 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
     setErrorMsg('');
     const cleanQuery = searchQuery.trim().toUpperCase();
 
-    // Check bookings made on this device first (fastest, no network needed)
+    // Check user created bookings first
     const foundUserBooking = userBookings.find(
       (b) => b.orderId.toUpperCase() === cleanQuery || b.phone.includes(cleanQuery)
     );
@@ -86,7 +86,7 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
       return;
     }
 
-    // Check mock/demo orders
+    // Check mock orders
     if (mockOrders[cleanQuery]) {
       setSelectedOrder(mockOrders[cleanQuery]);
       return;

@@ -4,10 +4,11 @@ import { ServiceItem } from '../types';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 interface ServicesSectionProps {
+  services?: ServiceItem[];
   onSelectService: (service: ServiceItem) => void;
 }
 
-export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectService }) => {
+export const ServicesSection: React.FC<ServicesSectionProps> = ({ services = SERVICES_DATA, onSelectService }) => {
   return (
     <section id="services" className="py-12 sm:py-16 bg-slate-50 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -28,9 +29,9 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
           </p>
         </div>
 
-        {/* 6 Service Cards Grid (Matching reference screenshot exactly) */}
+        {/* Dynamic Service Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          {SERVICES_DATA.map((service) => (
+          {services.map((service) => (
             <div
               key={service.id}
               onClick={() => onSelectService(service)}
