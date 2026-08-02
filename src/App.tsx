@@ -82,6 +82,11 @@ export default function App() {
   const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
 
+  // Becomes true once we've attempted to load offers/services/theme from the
+  // shared server. Prevents overwriting real server data with local defaults
+  // before that first fetch completes (see the sync effect below).
+  const [siteDataHydrated, setSiteDataHydrated] = useState(false);
+
   // Dynamic Services state with LocalStorage persistence
   const [services, setServices] = useState<ServiceItem[]>(() => {
     try {
@@ -122,6 +127,48 @@ export default function App() {
     }
   });
 
+  // Load the shared offers/services/theme from the server once on mount, so
+  // every visitor (and every device the admin uses) sees the same live data
+  // instead of whatever happens to be in this particular browser's storage.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/site-data')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (data.offers) setOffers(data.offers);
+        if (data.services) setServices(data.services);
+        if (data.theme) setCurrentTheme(data.theme);
+      })
+      .catch(() => {
+        // No network / first run: keep local defaults, that's fine.
+      })
+      .finally(() => {
+        if (!cancelled) setSiteDataHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Push offers/services/theme to the shared server whenever they change —
+  // but only after the initial hydration above, and only from a browser that
+  // is actually logged in as admin (regular visitors never have this token,
+  // so their browsers can never accidentally overwrite the shared data).
+  const syncSiteDataToServer = () => {
+    if (!siteDataHydrated) return;
+    const token = sessionStorage.getItem('almuhtarif_admin_token');
+    if (!token) return;
+    fetch('/api/site-data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ offers, services, theme: currentTheme })
+    }).catch(() => {
+      // Non-fatal: the change still applies locally for this admin session.
+    });
+  };
+
   // Save Bookings to LocalStorage
   useEffect(() => {
     try {
@@ -138,6 +185,8 @@ export default function App() {
     } catch (e) {
       console.error('Error saving offers:', e);
     }
+    syncSiteDataToServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offers]);
 
   // Save Services to LocalStorage
@@ -147,6 +196,8 @@ export default function App() {
     } catch (e) {
       console.error('Error saving services:', e);
     }
+    syncSiteDataToServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [services]);
 
   // Apply Theme to DOM
@@ -157,6 +208,8 @@ export default function App() {
     } catch (e) {
       console.error('Error saving theme:', e);
     }
+    syncSiteDataToServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTheme]);
 
   // Route/Path/Hash listener for secret Admin access (/admin, #admin, ?admin=true)
@@ -204,14 +257,6 @@ export default function App() {
   }, []);
 
   const [notifications, setNotifications] = useState<AppNotification[]>([
-    {
-      id: 'n1',
-      title: 'لوحة تحكم إدارة المكتب',
-      message: 'للدخول للوحة التحكم أضف #admin أو /admin إلى نهاية رابط الموقع، ثم استخدم اسم المستخدم admin وكلمة المرور 123456.',
-      date: 'اليوم',
-      read: false,
-      type: 'system'
-    },
     {
       id: 'n2',
       title: 'عرض خصم 22% على باقات دبي والعمرة',

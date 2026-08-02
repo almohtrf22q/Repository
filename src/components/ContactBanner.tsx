@@ -129,22 +129,9 @@ export const ContactBanner: React.FC<ContactBannerProps> = ({ onOpenContact, onO
         </div>
 
         {/* Bottom copyright line */}
-        <div className="pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 font-tajawal">
+        <div className="pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400 font-tajawal">
           <div>
             جميع الحقوق محفوظة © {new Date().getFullYear()} مكتب المحترف للسفريات والسياحة وخدمات الحج والعمرة
-          </div>
-          <div>
-            <a 
-              href="#admin" 
-              onClick={(e) => { 
-                e.preventDefault(); 
-                if (onOpenAdmin) onOpenAdmin(); 
-                window.location.hash = 'admin';
-              }} 
-              className="text-slate-500 hover:text-amber-400 text-[11px] font-bold transition-colors cursor-pointer"
-            >
-              • دخول مدير النظام (#admin)
-            </a>
           </div>
         </div>
 
