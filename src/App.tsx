@@ -15,6 +15,7 @@ import { LoyaltyModal } from './components/LoyaltyModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { ArrowUp } from 'lucide-react';
 import { SERVICES_DATA } from './data/services';
 import { DESTINATION_OFFERS } from './data/offers';
@@ -330,6 +331,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-cairo flex flex-col selection:bg-amber-500 selection:text-white pb-16 lg:pb-0">
+      <InstallAppPrompt />
       {/* Top Header Navigation */}
       <Header
         onOpenBooking={() => handleOpenBooking('flight')}
