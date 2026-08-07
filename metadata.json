@@ -1,6 +1,0 @@
-{
-  "name": "المحترف للسفريات والسياحة",
-  "description": "موقع المحترف للسفريات والسياحة لحجز تذاكر الطيران، الجوازات، خدمات الحج والعمرة، التأشيرات، الحافلات، والفنادق",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
